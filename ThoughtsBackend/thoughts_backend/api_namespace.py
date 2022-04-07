@@ -97,7 +97,10 @@ class ThoughtList(Resource):
         search_param = args['search']
         query = ThoughtModel.query
         if search_param:
-            query = (query.filter(ThoughtModel.text.contains(search_param)))
+            param = f'%{search_param}%'
+            query = (query.filter(ThoughtModel.text.ilike(param)))
+            # Old code, that it's not case insensitive in postgreSQL
+            # query = (query.filter(ThoughtModel.text.contains(search_param)))
 
         query = query.order_by('id')
         thoughts = query.all()
