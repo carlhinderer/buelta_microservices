@@ -218,7 +218,7 @@ CHAPTER 2 - PYTHON REST SERVICE
              in the body of the request, headers, query strings, or even cookies.
 
         3. It has a serialization framework for the resulting objects.  Flask-RESTPlus calls it
-            'response marshalling'.  This helps define objectsa that can be reused.
+            'response marshalling'.  This helps define objects that can be reused.
 
         4. It has full Swagger API documentation support.  Swagger is an open source project to
              help in the design, implementation, documentation, and testing of RESTful API
@@ -502,6 +502,52 @@ CHAPTER 2 - PYTHON REST SERVICE
 
 - Testing the Code
 
+    - We'll use the 'pytest-flask' extension, which helps with running tests for web applications.
+
+
+    - We can put pytest configuration options in a 'pytest.ini' file and fixtures in a 
+        'tests/conftest.py' file.
+
+
+    - To run tests:
+
+        $ pytest
+
+
+
 - Defining the pytest Fixtures
 
+    - We can define fixtures, which add data for tests, then clean up the data after the test is done
+        running.
+
+        @pytest.fixture
+        def thought_fixture(client):
+            '''
+            Generate three thoughts in the system.
+            '''
+
+            ...
+
+
+    - Then, we can use the fixture in our individual tests:
+
+        def test_list_thoughts(client, thought_fixture):
+            ...
+
+        def test_get_thought(client, thought_fixture):
+            thought_id = thought_fixture[0]
+            ...
+
+
+
 - Understanding test_token_validation.py
+
+    - To test the case when tokens are expired, we use 2 new modules.  The 'freezegun' module is used
+        retrieve a specific test time.  The 'delorean' extension is used to handle dates more easily.
+
+        @freeze_time('2018-05-17 13:47:34')
+        def test_invalid_token_header_expired():
+            expiry = delorean.parse('2018-05-17 13:47:33').datetime
+
+
+    - We have sample public and private keys stored in 'tests/constants.py'.
