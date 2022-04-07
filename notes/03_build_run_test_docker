@@ -1,12 +1,61 @@
----------------------------------------------------------------------
-CHAPTER 3 - BUILD, RUN, & TEST YOUR SERVICE USING DOCKER
----------------------------------------------------------------------
+----------------------------------------------------------------------------------
+| CHAPTER 3 - BUILD, RUN, & TEST YOUR SERVICE USING DOCKER                       |
+----------------------------------------------------------------------------------
 
-- Building Your Service with a Dockerfile
+- Building Service with a Dockerfile
+
+    - The simplest possible Dockerfile:
+
+        # Dockerfile.simple
+        FROM scratch
+        COPY example.txt /example.txt
+
+
+    - To build the Dockerfile:
+
+        # docker build -f <dockerfile> --tag <tag> <context>
+        $ docker build -f Dockerfile.simple --tag simple .
+
+        # Verify that the new image is there
+        $ docker images
+
+
 
 - Executing Commands
 
-- The Docker Cache
+    - Another simple Dockerfile:
+
+        # Dockerfile.run
+        FROM alpine
+        RUN mkdir -p /opt/
+        COPY example.txt /opt/example.txt
+
+
+    - To build the Dockerfile:
+
+        $ docker build -f Dockerfile.run --tag container-run .
+
+
+    - To run the Dockerfile and start with a command:
+
+        # docker run <image name> <command>
+        $ docker run container-run cat /opt/example.txt
+
+
+    - Or we can add the command to the Dockerfile instead:
+
+        # Command in Dockerfile
+        CMD cat /opt/example.txt
+
+        # Run the container
+        $ docker run container-run
+
+
+    - To open a shell into the running container:
+
+        $ docker run -it container-run /bin/sh
+
+
 
 - Building a Web Service Container
 
@@ -25,6 +74,7 @@ CHAPTER 3 - BUILD, RUN, & TEST YOUR SERVICE USING DOCKER
 - Deploying the Docker Service Locally
 
 - Pushing the Docker Image to a Remote Registry
+
     - Obtaining Public Images From DockerHub
     - Using Tags
     - Pushing Into a Registry
