@@ -261,8 +261,39 @@
 
 
 
-- Pushing the Docker Image to a Remote Registry
+- Using Tags
 
-    - Obtaining Public Images From DockerHub
-    - Using Tags
-    - Pushing Into a Registry
+    - We can use tags to download public images from DockerHub.
+
+        # Run a container with a Python interpreter
+        $ docker run -it python:3.7
+
+        # Run a container with a Python interpreter (slim)
+        $ docker run -it python:3.7-slim
+
+
+    - Note that an image can have any number of tags.
+
+        # Tag version 1.5 of our image
+        $ docker tag thoughts-backend:latest thoughts-backend:v1.5
+
+
+
+- Pushing Into a Registry
+
+    - First, we need to log into DockerHub and create a new repo, 'thoughts-backend' for
+        our image.
+
+
+    - We need to tag our repo.
+
+        $ docker tag thoughts-backend:latest carlhinderer/thoughts-backend:latest
+
+
+    - Then, we can log in and push our image up:
+
+        # Log in to DockerHub account
+        $ docker login
+
+        # Push up latest changes
+        $ docker push carlhinderer/thoughts-backend:latest
