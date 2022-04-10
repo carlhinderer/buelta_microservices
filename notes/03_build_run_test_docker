@@ -59,19 +59,207 @@
 
 - Building a Web Service Container
 
+    - We'll use uWSGI as our web server, since our Thoughts Backend service doesn't need to
+        serve static files, and will not be available externally.
+
+
+    - First, we'll create a 'docker/app/Dockerfile', which has 2 stages.
+
+        1. Compile the dependencies AS compile-image
+        2. Prepare the running container AS runtime-image
+
+      We do this because the compiler takes up so much space, we can make a much smaller
+        runtime-image by doing the compilation tasks in a separate image.
+
+
+    - Now, we can build our image, and we see that our runtime-image is much smaller than our
+        compile-image.
+
+        # Build
+        $ docker build -f docker/app/Dockerfile --tag thoughts-backend .
+
+        $ docker images
+        thoughts-backend latest 50efd3830a90 10 minutes ago 144MB
+        <none> <none> 027569681620 12 minutes ago 409MB
+
+
+    - And we can start our container with port 8000 opened, and we can navigate to the Swagger API
+        documentation page for the API.
+
+        $ docker run -it -p 127.0.0.1:8000:8000/tcp thoughts-backend
+
+        http://localhost:8000
+
+
+    - To get a shell into our container:
+
+        # Get container ID
+        $ docker ps
+
+        # Open a shell into the container
+        $ docker exec -it <container_id> /bin/sh
+
+
+
 - Configuring uWSGI
+
+    - Our 'uwsgi.ini' file looks like:
+
+        [uwsgi]
+        uid=uwsgi
+        chdir=/opt/code
+        wsgi-file=wsgi.py
+        master=True                            # Create master process that controls others
+        pidfile=/tmp/uwsgi.pid
+        http=:8000                             # Sets port and http option will load balance to workers
+        vacuum=True                            # Clean the environment when exiting
+        processes=1                            # Number of application workers
+        max-requests=5000                      # Recycle a worker after it handles this many requests
+        # Used to send commands to uWSGI
+        master-fifo=/tmp/uwsgi-fifo            # Create a Unix pipe to handle graceful stops
+
+
+    - The 'start_server.sh' script wraps the execution of uWSGI so that it can catch SIGTERM signals
+        and shut down gracefully.  This will ensure that existing requests will be finished before
+        shut down.
+
+
 
 - Refreshing Docker Commands
 
-- Operating with an Immutable Container
+    docker build       # Builds an image
+    docker run         # Runs an image
+    docker exec        # Executes a command in a running container
+    docker ps          # Shows currently running containers
+    docker images      # Displays existing images
+
+
 
 - Testing the Container
 
+    - We'll use docker-compose to run multiple services locally.  We'll define a service in 
+        'docker-compose.yml' for running our tests using SQLite.
+
+        # docker-compose.yml
+        version: '3.7'
+
+        services:
+            # Development related
+            test-sqlite:
+                environment:
+                    - PYTHONDONTWRITEBYTECODE=1
+                build:
+                    dockerfile: docker/app/Dockerfile
+                    context: .
+                entrypoint: pytest
+                volumes:
+                    - ./ThoughtsBackend:/opt/code
+
+
+    - Now we can build the container using docker-compose:
+
+        $ docker-compose build test-sqlite
+
+
+    - To run the container:
+
+        $ docker-compose run test-sqlite
+
+
+    - We can also pass arguments to the command that is running as the entrypoint.
+
+        # Run tests that match the string 'validation'
+        $ docker-compose run test-sqlite -k validation
+
+
+
 - Creating a PostgreSQL Container
+
+    - We can run tests against our SQLite database, but since we'll be using Postgres in production,
+        we should keep our tests as close to that environment as possible.  We'll create a separate
+        Dockerfile with scripts to build a Postgres container.
+
+
+    - Note that the ARG keyword in a Dockerfile means the argument can be passed in at build time.
+
+        # Define build arg and set it in environment variable
+        ARG POSTGRES_DB
+        ENV POSTGRES_DB $POSTGRES_DB
+
+        # Pass in argument at build time
+        --build-arg <varname>=<value>
+
+
+    - Now, we can build and start the DB using docker-compose:
+
+        $ docker-compose up db
+
+
+    - Then, from a different terminal, we can use a Postgres client (like pgcli) to access the
+        server.
+
+        $ psql -h localhost -U postgres thoughts
+
+
 
 - Configuring Your Service
 
+    - We'll use environment variables to inject configuration into immutable containers.  For
+        instance, we have a configuration option to determine whether to use SQLite or 
+        Postgres as a database in 'thoughts_backend/db.py'.
+
+        import os
+
+        DATABASE_ENGINE = os.environ.get('DATABASE_ENGINE', 'SQLITE')
+
+        if DATABASE_ENGINE == 'SQLITE':
+            ...
+        elif DATABASE_ENGINE == 'POSTGRESQL':
+            ...
+
+
+    - We can define environment variables separately in the 'docker-compose.yml', but if we have
+        a bunch of them it's often more convenient to put them in a separate files.  We put the
+        Postgres configuration we are going to use in an 'environment.env' file.
+
+
+    - Finally, we can run all of our tests with Postgres:
+
+        $ docker-compose run test-postgresql
+
+
+
 - Deploying the Docker Service Locally
+
+    - Now, we can run our Thoughts Backend service locally, backed by Postgres.
+
+        # Run the server, with output attached to the terminal
+        $ docker-compose up server
+
+        # Run the server in daemon mode with terminal detached
+        $ docker-compose up -d server
+
+
+    - To check the running services:
+
+        $ docker-compose ps
+
+
+    - And we can test our service:
+
+        $ http :8000/api/thoughts/
+
+
+    - To see the output of a container in detached mode:
+
+        $ docker-compose logs server
+
+
+    - To stop the entire cluser:
+
+        $ docker-compose down
+
+
 
 - Pushing the Docker Image to a Remote Registry
 
