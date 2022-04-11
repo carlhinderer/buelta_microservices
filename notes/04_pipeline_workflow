@@ -1,27 +1,86 @@
----------------------------------------------------------------------
-CHAPTER 4 - CREATING A PIPLINE & WORKFLOW
----------------------------------------------------------------------
+----------------------------------------------------------------------------------
+| CHAPTER 4 - CREATING A PIPLINE & WORKFLOW                                      |
+----------------------------------------------------------------------------------
 
-- Understanding CI Practices
+- Common Build Steps
 
-- Producing Automatic Builds
+    1. Compiling code (any C extensions in Python case)
+
+    2. Running unit tests
+
+    3. Running static code analysis tools
+
+    4. Building one or more containers
+
+    5. Checking dependencies for known vulnerabilities with a tool such as Safety
+
+    6. Generating a binary or source package
+
+    7. Running other kinds of tests
+
+    8. Generating reports, diagrams, or other assets from the code
+
+
 
 - Advantages of Using Docker for Builds
 
+    - Using Docker for represents a vast improvment when it comes to managing dependencies in 
+        different environments.  It allows for standardization in all environments.
+
+
+
 - Leveraging the Pipeline Concept
+
+    - A pipeline is a collection of stages.  If any of them are not successful, the pipeline stops.
+
+
+    - Each stage can produce elements used for later stages or in the final product of the full
+        build ('build artifacts').  
+
+
+    - Example pipeline:
+
+        1. Checkout code
+        2. docker-compose build
+        3. docker-compose run test
+        4. docker-compose run static-analysis
+        5. docker tag
+        6. docker push
+
+
+    - Note that if you have a complex build with a lot of stages, you may be able to run some
+        stages in parallel.
+
+
 
 - Branching, Merging, and Ensuring a Clear Main Build
 
+    - Typically, we run the build on every commit.  However, in feature branches, failures are
+        expected, whereas breaks in the main branch should be fixed as soon as possible.
+
+
+
 - Travis CI
-    - Configuring Travis CI
-    - Adding a Repo to Travis CI
-    - Creating the .travis.yml File
-    - Working With Travis Jobs
-    - Sending Notifications
 
-- Configuring GitHub
+    - This book uses Travis CI for continuous integration.  It used to be free but the free tier
+        is gone, and many projects have migrated away.  These were the topics included:
 
-- Pushing Docker Images from Travis CI
-    - Setting the Secret Variables
-    - Tagging and Pushing Builds
-    - Tagging and Pushing Every Commit
+        - Configuring Travis CI
+    
+            - Adding a Repo to Travis CI
+            - Creating the .travis.yml File
+            - Working With Travis Jobs
+            - Sending Notifications
+
+        - Configuring GitHub
+
+        - Pushing Docker Images from Travis CI
+    
+            - Setting the Secret Variables
+            - Tagging and Pushing Builds
+            - Tagging and Pushing Every Commit
+
+
+    - The easiest to use modern free alternative seems to be GitHub Actions.
+
+        https://docs.github.com/en/actions/quickstart
