@@ -1,26 +1,110 @@
----------------------------------------------------------------------
-CHAPTER 5 - USING KUBERNETES TO COORDINATE MICROSERVICES
----------------------------------------------------------------------
+----------------------------------------------------------------------------------
+| CHAPTER 5 - USING KUBERNETES TO COORDINATE MICROSERVICES                       |
+----------------------------------------------------------------------------------
 
-- The Kubernetes Orchestrator
+- Installing k3s and kubectl
+
+    - To install k3s on a Linux client:
+
+        # Install k3s
+        $ curl -sfL https://get.k3s.io | sh -
+
+        # Restart k3s in docker mode
+        $ sudo systemctl edit --full k3s.service
+        # Replace `ExecStart=/usr/local/bin/k3s` with `ExecStart=/usr/local/bin/k3sserver --docker`
+
+        $ sudo systemctl daemon-reload
+        $ sudo systemctl restart k3s
+        $ sudo systemctl enable k3s
+
+        # Allow access outside of root to KUBECTL config
+        $ sudo chmod 644 /etc/rancher/k3s/k3s.yaml
+
+        # Add your user to the docker group, to be able to run docker commands
+        # You may need to log out and log in again for the group to take effect
+        $ sudo usermod -a -G docker $USER
+
+
+    - Now, we can check all running pods.
+
+        $ kubectl get pods --all-namespaces
+
+
+    - Finally, we also need to install the Ingress controller.
+
+        $ kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/
+            controller-v1.1.2/deploy/static/provider/cloud/deploy.yaml
+
+
 
 - Comparing Kubernetes with Docker Swarm
 
-- Understanding the Kubernetes Elements
-    - Nodes
-    - Kubernetes Control Plane
-    - Kubernetes Objects
-        - Container
-        - Pod
-        - ConfigMap
-        - Volume
-        - Deployment
-        - Job
-        - Service
-        - Ingress
-        - Namespace
+    - Kubernetes is a popular container orchestration tool that allows us to manage and deploy 
+        multiple containers that interact with each other in a coordinated way.
 
-- Basic Operations with kubectl
+
+    - Docker has a native extension of docker-compose meant to work with multiple servers called
+        Docker Swarm.  This allows us to use the same YAML files we used to set up our local
+        cluster.
+
+
+    - Docker Swarm has a shorter learning curve, but Kubernetes is way more powerful and
+        customizable.
+
+
+
+- Understanding the Kubernetes Elements
+
+    - Nodes 
+        = physical machines or VMs that support the abstraction of the other elements
+        = don't need to be identical but often are for simplicity
+        = abstracted away by Kubernetes
+
+
+    - Kubernetes Control Plane
+        = where all processes used by Kubernetes are kept
+        = usually kept on a separate network so that problems won't affect running cluster
+
+
+    - Kubernetes Objects
+
+        - Container
+            = single Docker container
+
+        - Pod
+            = basic deployable unit, one or more containers
+            = usually a single container, maybe an additional one for auxiliary tasks like metrics
+            = all container in pod share same IP (pod IP)
+
+        - ConfigMap
+            = defines a set of key/value pairs that can be injected into pods
+            = typically as env variables or files
+
+        - Volume
+            = persistent storage
+
+        - Deployment
+            = grouping of one or more identical pods
+            = if pods are deleted, finished, or have problems, the deployment will start a new one
+
+        - Job
+            = creates one or more pods that are expected to finish
+            = there are also 'cron jobs', which will run at specified times
+
+        - Service
+            = service needs to define a name so that other elements can discover it
+            = typically related to a deployment
+
+        - Ingress
+            = while a service is internal, and egress is external
+            = routes any external requests to the appropriate service so they can be served
+            = internally, is a container that implements the ingress controller (nginx by default)
+
+        - Namespace
+            = definition of a virtual cluster
+            = must have unique name
+
+
 
 - Defining an Element
 
