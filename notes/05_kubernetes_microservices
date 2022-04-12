@@ -122,7 +122,8 @@
 
       For example, to create a new pod using the official nginx image from Docker Hub:
 
-        ---
+        # example_pod.yml
+        ------------------
         apiVersion: v1
         kind: Pod
         metadata:
@@ -134,9 +135,65 @@
               image: library/nginx:latest
 
 
+    - To run this pod:
+
+        # Run example pod
+        $ kubectl apply -f example_pod.yml
+
+        # List all pods
+        $ kubectl get pods -n example
+
+
+    - To exec into the container and make sure it is up and serving files:
+
+        $ kubectl exec -it nginx -n example /bin/bash
+
+
+    - To edit the pod while it is running:
+
+        $ kubectl edit pod nginx -n example
+
+      Or we can edit the 'example_pod.yml' file and restart the pod.
+
+
 
 - Getting More Information
 
+    - We can get more information by using the '-w' (wide) option.
+
+        # Get details of pods
+        $ kubectl get pods -n example -o wide
+        $ kubectl get pods -n example -w
+
+
+    - We can use 'describe' to get more information about a particular element.
+
+        $ kubectl describe pod nginx -n example
+
+
+
 - Removing an Element
 
+    - The 'delete' command removes an element and everything under it.
+
+        # Delete namespace
+        $ kubectl delete namespace example
+
+        # Ensure associated pods are deleted
+        $ kubectl get pods -n example
+
+
+
 - Troubleshooting a Running Cluster
+
+    - If we get an 'ErrImagePull' error, we couldn't download from the image registry, possibly
+        due to authentication problems.
+
+
+    - A status of 'CrashLoopBackOff' means that the process for the container has been interrupted.
+
+        # Check stdout logs of a container
+        $ kubectl logs <pod> -n <namespace> -c <container>
+
+        # Manually run a container
+        $ docker run <image>
