@@ -4,9 +4,107 @@
 
 - Implementing Multiple Services
 
-- Describing the Users Backend Microservice
+    - Thoughts Backend 
+        = handles storage of thoughts and search for them
+
+    - Users Backend 
+        = stores users and allows them to log in
+        = creates a token that can be used to authenticate against other systems
+
+    - Frontend
+        = comes from monolith, but no longer accesses database directly
+
+
+
+- The Users Backend Microservice
+
+    - There are 2 endpoints in our API:
+
+        POST /api/login/            # Login and return valid Auth header
+
+        POST /admin/users/          # Create a new user
+
+        # Input to both is {username: 'user', password: 'pw'}
+
+
+    - The User model is very simple.
+
+        class UserModel(db.Model):
+            id = db.Column(db.Integer, primary_key=True)
+            username = db.Column(db.String(50))
+            password = db.Column(db.String(50))     # Stored in plain text for simple example
+            creation = db.Column(db.DateTime, server_default=func.now())
+
+
 
 - Describing the Frontend Microservice
+
+    - The frontend is based on the original Django monolith, only the database calls have been
+        replaced with API calls.  We use the 'requests' library for this.
+
+
+    - All of the Django ORM and data logic have been removed from the original app, since it no
+        longer has its own DB.
+
+
+    - For instance, here is the 'search.py' file, which now sends an API call.  The result is
+        decoded in JSON and 
+
+        import requests
+
+        def search(request):
+            username = get_username_from_session(request)
+            search_param = request.GET.get('search')
+
+            url = settings.THOUGHTS_BACKEND + '/api/thoughts/'
+            params = {
+                'search': search_param,
+            }
+
+            result = requests.get(url, params=params)
+            results = result.json()
+
+            context = {
+                'thoughts': results,
+                'username': username,
+            }
+
+            return render(request, 'search.html', context)
+
+
+    - For an example that requires authentication, we can look at 'list_thoughts':
+
+        def list_thoughts(request):
+            username = get_username_from_session(request)
+            if not username:
+                return redirect('login')
+
+            url = settings.THOUGHTS_BACKEND + '/api/me/thoughts/'
+            headers = {
+                'Authorization': request.COOKIES.get('session'),
+            }
+
+            result = requests.get(url, headers=headers)
+            if result.status_code != http.client.OK:
+                return redirect('login')
+
+            context = {
+                'thoughts': result.json(),
+                'username': username,
+            }
+
+            return render(request, 'list_thoughts.html', context)
+
+        def get_username_from_session(request):
+            cookie_session = request.COOKIES.get('session')
+            username = validate_token_header(cookie_session, settings.TOKENS_PUBLIC_KEY)
+
+            if not username:
+                return None
+
+            return username
+
+
 
 - Connecting the Services
 
