@@ -108,6 +108,33 @@
 
 - Defining an Element
 
+    - We can use kubectl to create a new element.
+
+        # Create a namespace
+        $ kubectl create namespace example
+
+        # List namespaces
+        $ kubectl get namespaces
+
+
+    - A namespace is a special example since it doesn't need any configuration, but other 
+        elements require YAML files that describe the element.
+
+      For example, to create a new pod using the official nginx image from Docker Hub:
+
+        ---
+        apiVersion: v1
+        kind: Pod
+        metadata:
+          name: nginx
+          namespace: example
+        spec:
+          containers:
+            - name: nginx
+              image: library/nginx:latest
+
+
+
 - Getting More Information
 
 - Removing an Element
