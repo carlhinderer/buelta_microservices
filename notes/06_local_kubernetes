@@ -48,7 +48,7 @@
 
 
     - For instance, here is the 'search.py' file, which now sends an API call.  The result is
-        decoded in JSON and 
+        decoded in JSON and rendered in the template.
 
         import requests
 
@@ -72,7 +72,8 @@
             return render(request, 'search.html', context)
 
 
-    - For an example that requires authentication, we can look at 'list_thoughts':
+    - For an example that requires authentication, we can look at 'list_thoughts'.  Note that we store
+        the authentication token in a session cookie between requests.
 
         def list_thoughts(request):
             username = get_username_from_session(request)
@@ -108,10 +109,139 @@
 
 - Connecting the Services
 
+    - We can test the services using only docker-compose if we want to.  The Thoughts Backend exposes
+        port 8000 and the Users Backend exposes port 8001.  This allows the Frontend to connect to
+        them (and expose port 8002).  docker-compose will create its own network for them to connect.
+
+
+    - The Frontend service needs to connect to the others.  The URL of the services needs to be added
+        to the 'environment.env' file.
+
+        # Get local IP
+        $ ifconfig
+
+        # Add to environment.env
+        THOUGHTS_BACKEND_URL=http://10.0.10.3:8000
+        USER_BACKEND_URL=http://10.0.10.3:8001
+
+
+    - Now, we just need to start each of the 3 services.
+
+        # Start the thoughts backend
+        $ cd thoughts_backend
+        $ docker-compose up server
+
+        # Start the users backend
+        $ cd users_backend
+        $ docker-compose up server
+
+        # Start the frontend
+        $ cd frontend
+        $ docker-compose up server
+
+
+
 - Configuring the Services
-    - Configuring the Deployment
-    - Configuring the Service
-    - Configuring the Ingress
+
+    - To configure the apps in Kubernetes, we need to define the following objects per app:
+
+        1. Deployment
+             = controls the creation of pods, so they will always be available
+             = creates pods based on images specified, pod runs the app
+
+        2. Service
+             = makes the RESTful requests available inside the cluster
+             = routes requests to any available pod
+
+        3. Ingress
+             = makes service available outside the cluster
+
+
+    - We'll use the 'example' namespace.
+
+        $ kubectl create namespace example
+
+
+
+- Configuring the Deployment
+
+    - For the Thoughts Backend, we will deploy a pod with 2 containers, one with the database and 
+        the other with the application.
+
+      We add the configuration in 'thoughts_backend/kubernetes/deployment.yaml'.
+
+
+    - To get the deployment in Kubernetes, you need to apply the file.
+
+        $ kubectl apply -f thoughts_backend/kubernetes/deployment.yaml
+
+
+    - To check that the deployment has been created in the cluster:
+
+        # View deployments
+        $ kubectl get deployments -n example
+
+        # View pods
+        $ kubectl get pods -n example
+
+
+    - The pods are created automatically by the deployment.  To see this, we can delete the pod and
+        see that a new one has been created.
+
+        # Delete pod
+        $ kubectl delete pod thoughts-backend-55c686f6f5-9hnc8 -n example
+
+        # Ensure that new pod has been started
+        $ kubectl get pods -n example
+
+
+
+- Configuring the Service
+
+    - We create a Kubernetes service to create a name for the application exposed by the created
+        deployment.  
+
+        # thoughts_backend/kubernetes/service.yaml
+        ---
+        apiVersion: v1
+        kind: Service
+        metadata:
+            namespace: example
+            labels:
+                app: thoughts-service
+            name: thoughts-service
+        spec:
+            ports:
+                - name: thoughts-backend
+                  port: 80
+                  targetPort: 8000
+            selector:
+                app: thoughts-backend
+            type: NodePort
+
+
+    - To add the service:
+
+        $ kubectl apply -f kubernetes/service.yaml
+
+
+    - Since we used 'NodePort' as the type of port, we can access the service from outside the
+        cluster.  This allows us to check that it is working correctly.
+
+        # Get external IP of service
+        $ kubectl get service -n example
+
+        # PORT(S) 
+        # 80:30685/TCP
+
+
+        # Now we can access the port to verify the service is working correctly.
+        http://localhost:30685/
+
+
+
+
+- Configuring the Ingress
 
 - Deploying the Full System Locally
     - Deploying the Users Backend
