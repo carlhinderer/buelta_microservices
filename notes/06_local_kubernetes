@@ -240,8 +240,42 @@
 
 
 
-
 - Configuring the Ingress
+
+    - Finally, we need to describe the Ingress in 'ingress.yaml'.
+
+        # thoughts_backend/kubernetes/ingress.yaml
+        ------------------------------------------------
+        ---
+        apiVersion: networking.k8s.io/v1
+        kind: Ingress
+        metadata:
+            name: thoughts-backend-ingress
+            namespace: example
+        spec:
+            rules:
+                - host: thoughts.example.local
+                  http:
+                    paths:
+                      - backend:
+                          service:
+                            name: thoughts-service
+                            port:
+                              number: 80
+                        path: /
+                        pathType: ImplementationSpecific
+
+
+    - To add the ingress:
+
+        $ kubectl apply -f kubernetes/ingress.yaml
+
+
+    - To verify it has been added:
+
+        $ kubectl get ingress -n
+
+
 
 - Deploying the Full System Locally
     - Deploying the Users Backend
