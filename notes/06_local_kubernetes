@@ -276,7 +276,51 @@
         $ kubectl get ingress -n
 
 
+    - Now that we have added the ingress, we can try to access the thoughts backend.
 
-- Deploying the Full System Locally
-    - Deploying the Users Backend
-    - Adding the Frontend
+        $ curl http://localhost
+        404 page not found
+
+
+    - What we need to do is be able to point any request to 'thoughts.example.local' to our
+        localhost.  The easiest way to do this is to add a rule to our '/etc/hosts' file.
+
+        # /etc/hosts
+        ----------------------
+        127.0.0.1 thoughts.example.local
+
+      Defining different host entries for each service allows us to access all the services
+        externally, which is very useful for debugging.
+
+
+    - Now, we can access our service in a web browser:
+
+        http://thoughts.example.local
+
+
+
+- Deploying the Users Backend
+
+    - Next, we can deploy the users_backend in much the same way.
+
+        $ kubectl apply -f users_backend/kubernetes/deployment.yaml
+        $ kubectl apply -f users_backend/kubernetes/service.yaml
+        $ kubectl apply -f users_backend/kubernetes/ingress.yaml
+
+
+    - And we need to add another entry to our '/etc/hosts' file:
+
+        # /etc/hosts
+        ------------------------
+        127.0.0.1 users.example.local
+
+
+    - Now we can access the users_backend service in our browser:
+
+        http://users.example.local
+
+
+
+- Adding the Frontend
+
+    - 
