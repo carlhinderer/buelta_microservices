@@ -323,4 +323,18 @@
 
 - Adding the Frontend
 
-    - 
+    - We deploy the frontend as we have before.
+
+        $ kubectl apply -f frontend/kubernetes/deployment.yaml
+        $ kubectl apply -f frontend/kubernetes/service.yaml
+        $ kubectl apply -f frontend/kubernetes/ingress.yaml
+
+
+    - And we add another rule to '/etc/hosts'.
+
+        # /etc/hosts
+        --------------------------
+        127.0.0.1 frontend.example.local
+
+
+    - Note that we have added a rule in the Django app allowing all hosts.
