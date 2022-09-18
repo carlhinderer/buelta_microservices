@@ -1,0 +1,231 @@
+-----------------------------------------------------------------------
+| CHAPTER 1 - UNDERSTANDING MICROSERVICES                             |
+-----------------------------------------------------------------------
+
+- Example Microservice Architecture - Hotel Reservation System
+
+
+                       UsersDB     EmailService      BillsDB        Bank
+                          |     /                \      |       /
+                       Users                        Payments
+                          |                         
+
+      User  <-->       Booking UI (JavaScript)
+
+                      |            |               |             |
+                Authentication   Search         Reservations   PDF Reports  
+                      |           |   |            |
+                   Tokens         |  HotelsDB   ReservationsDB
+                             Third-Party
+                             Hotels
+
+
+
+- Benefits of Microservices
+
+    - Separation of concerns
+    - Smaller project to deal with
+    - More scaling and deployment options
+    - Each team can manage a small part of the application, communication through well-defined APIs
+    - Each microservice does one thing well, can be deployed according to its needs
+    - Scaling is easier
+
+
+
+- Pitfalls of Microservices
+
+    - Illogical splitting (shouldn't need to deploy 2 services at the same time)
+    - More network integrations
+    - Data storing and sharing (avoiding data duplication is a big challenge)
+    - Compatability issues
+    - Testing
+
+
+
+- The WSGI Standard
+
+    - The Python web community created a standard called WSGI (Web Server Gateway Interface), which 
+        simplifies how you write a Python application to serve HTTP requests.
+
+    - When you code to this standard, your project can be executed by standard web servers like Apache
+        (via mod_wsgi) and nginx (via uwsgi).
+
+    - The biggest problem with WSGI is that it is synchronous.  The ASGI has emerged as a successor to
+        WSGI, allowing frameworks to operate asynchronously with the same seamless behavior as before.
+
+
+
+- Introduction to the WSGI Ecosystem
+
+    - From blog post at https://www.ultravioletsoftware.com/single-post/2017/03/23/
+        An-introduction-into-the-WSGI-ecosystem
+
+    - In the early times, if you wanted to write a Python web app, your choices were limited, you used
+        CGI and 'mod_python'.  These options were limiting, and had performance and security problems.
+
+    - The WSGI standard was created to provide a standard interface between a web server and a Python
+        application.  It allows any server to work with any application as long as both sides implement
+        the spec.
+
+
+    - For instance, here is an example of a basic python app that implements the spec:
+
+        def application(environ, start_response):
+            start_response('200 OK', [('Content-Type', 'text/plain')])
+            return [b'Hello World!']
+
+
+    - To run it (with no external libraries or frameworks needed):
+
+        $ pip install uwsgi
+        $ uswgi --http :8000 --wsgi-file app.py
+
+
+    - 'Werkzeug' is a library, written by Armin Ronacher, that consists of a large set of utilities
+        designed to make writing WSGI-compliant Python application easier.
+
+    - 'Flask' is a web app framework, also written by Armin Ronacher, that is implemented using the
+        Werkzeug library.  It contains it's own server, which is actually Werkzeug's web server exposed
+        through Flask.
+
+    - 'uWSGI' is a popular web server that implements the WSGI standard.  It is commonly used as a web
+        server for Flask applications.  It is a fully-featured web server that is very capable of running
+        production web apps.  It runs the workers that actually run the web app.
+
+    - Often, 'nginx' will be deployed in front of uWSGI.  This is because nginx is much more performant at
+        serving static content.  In this case, nginx serves the static content and passes everything else
+        to uWSGI.
+
+    - Confusingly, 'uswgi' is the name of the binary protocol that nginx and uWSGI use to communicate with
+        each other.
+
+
+
+- Workers, Threads, and Synchronicity
+
+    - Our traditional web applications are synchronous, which means a request accepts a piece of work,
+        does that work, then returns the result.  While it's doing all of that, the program can't do
+        anything else.
+
+
+    - There are several approaches to solving this problem:
+
+        1. Worker pool approach
+        2. Early context-switching environments
+        3. Asynchronous Python
+
+
+
+- Worker Pool Approach
+
+    - Accepting a new request is fast, and the bulk of the time is taken up doing the work that was
+        requested.  When an application has lots of requests arriving, an effective strategy is to ensure 
+        that all the heavy lifting is done using other processes or threads. 
+
+    - Starting a new process or thread is expensive, so a common technique is to start these workers early
+        and keep them around, giving them new work as it arrives.
+
+    - This is an old and very effective technique, but you're limited by the number of worker threads you
+        can have, and swapping between them is expensive.
+
+
+
+- Being Asynchronous
+
+    - It's important to understand that communication over a network is orders of magnitude slower than
+        local communication.
+
+        Reading 1 MB from memory = 3000 ns
+        Sending a packet over network and getting resonse in same building = 500,000 ns
+        Communicating with computer on another continent = hundreds of ms
+
+
+    - Asynchronous programs are aware that some tasks it is performing may take a long time, and goes on
+        with other work while it is waiting, without necessarily having to use other processes or threads.
+
+
+
+- Twisted, Tornado, Greenlets, and Gevent
+
+    - For a long time, non-WSGI frameworks like Twisted and Tornado were the popular answer for 
+        concurrency in Python.  They allow developers to specify callbacks for many simultaneous requests.
+
+
+    - Another popular approach involves Greenlets and Gevents.  The Greenlet project is a package based
+        on the Stackess project, a particular CPython implementation.
+
+        - Greenlets are pseudo-threads that are very cheap to instantiate, and can be used to call Python
+            functions.  Within those functions, you can switch and give control back to another
+            function.  The switching is done in an event loop.  This allows you to write an asynchronous
+            application with a thread-like interface.
+
+        - However, switching from one greenlet to another is done explicitly, which can make code hard
+            to understand.  To solve this, the GEvent project is built on top of Greenlet and offers
+            and offers an implicit and automatic way of switching between Greenlets.
+
+
+
+- Asynchronous Python
+
+    - With experience from all these previous options, Python now has 'asyncio' as a core feature  It
+        started as a Guido van Rossum side project.  It uses an explicit approach.
+
+    - The explicit approach makes a lot of sense.  The way Python core developers coded 'asyncio', and
+        the way the extended the language with the 'async' and 'await' keywords to implement coroutines,
+        made asynchronous applications easy to understand.
+
+
+    - The 'aiohttp' package is one of the most mature.  To implement a web endpoint that returns the
+        current time:
+
+        from aiohttp import web  
+        import time 
+
+        async def handle(request): 
+            return web.json_response({'time': time.time()}) 
+
+        if __name__ == '__main__': 
+            app = web.Application() 
+            app.router.add_get('/', handle) 
+            web.run_app(app) 
+
+   
+    - Here's an example of using 'aiopg', a PostgreSQL library for asyncio:
+
+        import asyncio 
+        import aiopg 
+
+        dsn = "dbname=postgres user=postgres password=mysecretpassword host=127.0.0.1"
+
+        async def go():
+            pool = await aiopg.create_pool(dsn)
+
+            async with pool.acquire() as conn:
+                async with conn.cursor() as cur:
+                    await cur.execute("SELECT 1")
+                    ret = []
+                    async for row in cur:
+                        ret.append(row)
+                    assert ret == [(1,)]
+
+            await pool.clear()
+
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(go())
+
+
+    - If you need to use a library that is not asynchronous in your asynchronous code, you will need to
+        go through some challenging work to get it work well together.
+
+    - In this book, we'll use a web framework called 'Quart', which is very similar to Flask, but is also
+        asynchronous.
+
+
+
+- Python Language Performance
+
+    - One controversial topic in the Python community around speeding up the language is the GIL.  It
+        affects performance, because multi-threaded applications cannot use several processes.
+
+    - The GIL has good reasons to exist.  It protects non-thread-safe parts of the CPython interpreter.
+        All attempts to remove it so far have failed to produce a faster CPython implementation.

@@ -273,7 +273,7 @@
 
     - To verify it has been added:
 
-        $ kubectl get ingress -n
+        $ kubectl get ingress -n example
 
 
     - Now that we have added the ingress, we can try to access the thoughts backend.
@@ -337,4 +337,7 @@
         127.0.0.1 frontend.example.local
 
 
-    - Note that we have added a rule in the Django app allowing all hosts.
+    - Note that we have added a rule in the Django app allowing all hosts.  We can now view
+        our frontend:
+
+        http://frontend.example.local/
