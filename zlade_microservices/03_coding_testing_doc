@@ -1,0 +1,325 @@
+-----------------------------------------------------------------------
+| CHAPTER 3 - CODING, TESTING, & DOCUMENTATION                        |
+-----------------------------------------------------------------------
+
+- Coding and Testing
+
+    - 'TDD' is an approach where you write tests alongside the code and use tests to guide what the code
+        should do.  It will catch a lot of errors before damage is caused, and makes it much easier to fix
+        bugs or refactor without breaking anything.
+
+    - 'BDD' uses tests to describe the desired behavior in a more human-friendly language.
+
+    - Documentation is usually the first thing to fall behind.  However, coding, testing, and documentation
+        should always be done together continuously.
+
+
+
+- Different Kinds of Tests
+
+    1. Unit tests = make sure a class or function works as expected in isolation
+
+    2. Functional tests = Verify the microservice does what it says and behaves correctly
+
+    3. Integration tests = Verify how a microservice integrates with all it's network dependencies
+
+    4. Load tests = Measure the microservice performance
+
+    5. End-to-end tests = Verify the whole system works, from initial request to final action
+
+
+
+- Unit Tests
+
+    - The 'unit' being tested is a small component of the code, like a single function or module.
+
+    - If we can instantiate everything needed for a component to work, it can be easily tested since it
+        has been given everything it needs.  However, if a class calls another piece of code that is not
+        built into Python or it's standard library, it is not in isolation any more.
+
+
+    - Is some cases, it will be useful to mock those calls to achieve isolation.  In this case, we'll
+        replace a piece of code with a fake version.  The problem with mocking things out is that we
+        don't get the exact behavior of our real application.  So we should limit it to these cases:
+
+        1. I/O Operations
+        2. CPU-intensive operations
+        3. Specific behaviors to reproduce (ie a network outage or changing data/time)
+
+
+    - We can improve our unit tests by reducing the number of functinos that have side effects and gather
+        I/O operations into the highest level possible.  This way, we have fewer methods that need 
+        connections mocked out.
+
+    - Trying to get 100% test coverage on every single line of code is often more work than it is worth.
+        For a microservice, focus on a robust set of functional tests instead.
+
+
+
+- Functional Tests
+
+    - Functional tests for a microservice project are all the tests that interact with the published API
+        by sending HTTP requests and asserting that HTTP responses are the expected ones.  These are more
+        behavior-oriented than unit tests.
+
+    - This definition is broad enough to include any tests that can call the application, from fuzzing
+        tests (sending gibberish) to penetration tests.
+
+
+    - As developers, the 2 most important kinds of tests we should focus on are:
+
+        1. Tests that verify the application does what it was built for
+        2. Tests that ensure abnormal behavior that was fixed isn't happening any more
+
+
+    - The general pattern is to take an instance of the application in the test class, then interact with
+        it.  In that context, the network layer is not used.  Flask includes a test client to build
+        requests, which can be created directly from the 'app' object using the 'test_client()' method.
+
+        import json
+        import app as tested_app
+
+        def test_hello():
+            app = tested_app.test_client()
+
+            hello = app.get('/api')
+            body = json.loads(str(hello.get_data(), 'utf8'))
+
+            assert body['Hello'] == 'World!'
+
+
+
+- Integration Tests
+
+    - Integration tests are functional tests without any mocking and should be able to run on a real
+        deployment of your application.  For example, if your service interacts with Redis or RabbitMQ,
+        they will be called by your service as normal when the integration tests are run.
+
+    - The difficulty of this is setting up and cleaning up test data.  Good configuration management
+        software can help significantly with integration tests.  Having an Ansible playbook or Puppet
+        config script can mean deploying all of these components in a single command.
+
+    - Integration tests can also by run on a development or staging deployment of your service.  With
+        many developers pushing changes, there may be contention for this limitied resource, but it
+        can be simpler to run all the tests this way.
+
+
+
+- Load Tests
+
+    - Load testing will tell you how your application performs under stress.  This will help you plan
+        for future eventualities, as well as distribute the workload your application currently has.
+
+    - A good load test can also point you to changes that can be made to remove a bottleneck, such as
+        removing an exclusive lock from writes to the database.
+
+
+    - Writing load tests can help you answer the following questions:
+
+        1. How many users can one instance of my service serve when I deploy it on this machine?
+    
+        2. What is the average response time when there are 10, 100, or 1,000 concurrent requests? Can I 
+             handle that much concurrency?
+
+        3. When my service is under stress, is it running out of RAM or is it mainly CPU-bound? Is it 
+             waiting on another service?
+
+        4. Can I add other instances of the same service and scale horizontally?
+
+        5. If my microservice calls other services, can I use pools of connectors, or do I have to 
+             serialize all the interactions through a single connection?
+
+        6. Can my service run for multiple days at a time without degradation?
+
+        7. Is my service working properly after a usage peak?
+
+
+    - The 'Salvo' library is an Apache Bench equivalent written in Python, which can be used to apply
+        load to your endpoints.
+
+        # Simulate 10 concurrent connections, each making 100 sequential requests to an endpoint
+        $ salvo http://127.0.0.1:5000/api --concurrency 10 --requests 100
+
+
+    - Salvo is based on 'Molotov' which requires a bit more work to set up, but has more features, such 
+        as allowing interactive scenarios with sets of queries and expected responses.
+
+
+
+- End-to-End Tests
+
+    - An end-to-end test will check that the whole system works as expected from the end-user point of
+        view.  The test needs to behave like a real client and call the system through the same UI.
+        A browser automation tool like Selenium is commonly used for this purpose.
+
+    - If the front-end is written in a JS framework, preparing all the static JS files needed for rendering
+        is also required.
+
+
+
+- Using pytest and tox
+
+    - The pytest project is very popular, and since it offers extensions, people have started to write
+        useful tools around it.  Very popular extensions include :
+
+        - pytest-cov =  runs coverage tool
+        - pytest-flake8 =  runs the Flake8 linter
+        - black = opinionated formatter
+
+        $ pytest --flake8 --black
+
+
+    - The 'tox' tool is very helpful when used in conjunction with pytest.  It reads a config file called
+        'tox.ini' in the root directory of your project.  Tox assumes your project is a Python package
+        and therefore has a 'tox.ini' file, but that's the only requirement.
+
+        # tox.ini
+        -------------------
+        [tox]
+        envlist = py38,py39
+
+        [testenv]
+        deps = pytest
+           pytest-cov
+           pytest-flake8
+
+
+    - When tox is executed by calling the 'tox' command, it will create a separate environment for each
+        Python version, deploy your package, and run the tests in it using the 'pytest' command.
+
+        # Run all envioronments
+        $ tox
+
+        # Run a single environment
+        $ tox -e py38
+
+
+
+- Developer Documentation
+
+    - Developer documentation should evovle with the code.  This includes everything a developer should
+        know about your microservices project, especially:
+
+          - How it is designed
+          - How to install it
+          - How to run tests
+          - What are the exposed APIs and what data moves in and out?
+
+
+    - People go to documentation to get their questions answered.  These include:
+
+        - Who should use this software?
+        - What does this software do?
+        - Where can it be deployed?
+        - When is using it helpful?
+        - Why does it work this way?
+        - How do I install and configure it?
+
+
+    - The 'Sphinx' tool was developed to document Python itself, then became a standard in the Python
+        community.  Sphinx treats documents like source code by separating the content from the layout.
+
+      The usual way to use Sphinx is to use a 'docs' directory in the project, which is then used to
+        generate HTML with Sphinx's command-line utility.  This HTML website can then be published to
+        the web, and it adds index pages, navigation links, and even a JS search engine.  The content of
+        the documentation is written in reST (restructured text), a standard markdown language in the
+        Python community.
+
+
+    - Markdown is another popular markup language, and is commonly used to create README files on 
+        Github.
+
+
+    - To start a project with Sphinx:
+
+        $ sphinx-quickstart
+
+
+    - To add document creation to your 'tox.ini':
+
+        [testenv:docs]
+        basepython=python
+        deps =
+            -requirements.txt
+            sphinx
+        commands =
+            sphinx-build -W -b html docs/source docs/build
+
+
+        # Then, to generate documentation
+        $ tox -e docs
+
+
+    - The Sphinx extension 'Autodoc' can be used to automatically extract code snippets for documentation.
+
+
+
+- CI and CD
+
+    - A CI system works by listening for changes in your version control system for the right time to
+        run commands you decide on.
+
+    - A CD system can be set up to run tests automatically, update documentation, and even deploy to
+        production automatically.
+
+
+    - There are may CI system choices available, including CircleCI and Jenkins.  GitHub Actions is
+        integrated into GitHub and is used for this book.  It looks for files in a directory called
+        'github/workflows'.
+
+        # .github/workflows/python.yml
+        -------------------------------------
+        ---
+        name: Python package
+        on: [push]
+        jobs:
+          build:
+            runs-on: ubuntu-latest
+            strategy:
+              matrix:
+                python: [3.7, 3.8, 3.9]
+            steps:
+              - uses: actions/checkout@v2
+              - name: Setup Python ${{ matrix.python }}
+                uses: actions/setup-python@v2
+                with:
+                  python-version: ${{ matrix.python }}
+              - name: Install Tox and any other packages
+                run: pip install tox
+              - name: Run Tox
+                # Run tox using the version of Python in `PATH`
+                run: tox -e py
+
+
+    - With the 'on: [push]' setting, this action will be run every time the repository receives a new
+        change (including PRs), so we can see whether the tests pass for anyone wanting to make a 
+        change.
+
+    - GitHub has a built-in documentation service called 'GitHub Pages'.  In this book, we use 
+        'RTD (Read the Docs)', a Python standard.  Using this approach, our documentation can be written
+        using either .rst or .md files.
+
+    - The 'Coveralls' service can be used to keep track of test coverage over time.  Every time the
+        project is changed and GitHub Actions triggers a build, Coveralls will display a new coverage
+        summary.
+
+
+
+    - Once we start to add services to our project, it's a good practice to add badges to the project's
+        README so the community can see each the status of each service with a link to the service:
+
+        README.rst
+        ------------------------------------
+        microservice-skeleton 
+        =====================
+         
+        This project is a template for building microservices with Quart. 
+         
+        .. image:: https://coveralls.io/repos/github/PythonMicroservices/microservice-skeleton/
+                   badge.svg?branch=main
+           :target: https://coveralls.io/github/PythonMicroservices/microservice-skeleton?branch=main
+         
+        .. image:: https://github.com/PythonMicroservices/microservice-skeleton/workflows/Python%20Testing/
+                   badge.svg 
+        .. image:: https://readthedocs.org/projects/microservice/badge/?version=latest 
+           :target: https://microservice.readthedocs.io 
