@@ -1,0 +1,525 @@
+-----------------------------------------------------------------------
+| CHAPTER 2 - DISCOVERING QUART                                       |
+-----------------------------------------------------------------------
+
+- Basic Request Handling
+
+    - Here, we use the global 'request' object (specific to each request) and return a response.
+
+        from flask import request, jsonify
+
+        app = Flask(__name__)
+
+        @app.route('/api', provide_automatic_operations=False)
+        def my_microservice():
+            print(dir(request))
+            response = jsonify({'Hello': 'World'})
+            print(response)
+            print(response.get_data())
+            return response
+
+        if __name__ == '__main__':
+            print(app.url_map)
+            app.run()
+
+
+    - By default, the 'OPTIONS' and 'HEAD' methods are implicitly added to every route.  The 
+        'provide_automatic_operations' parameter can disable this.
+
+
+    - Built-in URL converters:
+
+        string (default)
+        int
+        float
+        path
+        any
+        uuid
+
+      Custom converters can also be created.
+
+
+    - Always use versioning in an API.
+
+        /api/v1/person
+        /api/v2/person
+
+
+    - The 'url_for()' method takes a view and returns it's URL.
+
+        url_for('person', id=1)
+
+
+
+- Requests and Responses
+
+    - To get the credentials from a request that was sent with HTTP Basic authentication:
+
+        @app.route('/')
+        def auth():
+            print(request.authorization['username'])
+            print(request.authorization['password'])
+            return ''
+
+
+    - To send the request:
+
+        $ curl http://localhost:5000/ --user alice:password
+
+
+    - Valid Responses to return:
+
+        1. Response() object = Create a Response object manually
+
+        2. str = A string will be encoded as a text/html object in the response (Useful for HTML)
+
+        3. dict = A dict will be encoded as application/json using 'jsonify'
+
+        4. A generator can be returned so that data can be streamed to the client.
+
+        5. (response, status) tuple
+
+        6. (response, status, headers) tuple
+
+
+    - All request handling can be summarized as follows:
+
+        1. When the application starts, any function decorated with '@app.route()' is registered as a view
+             and stored in 'app.url_map'.
+
+        2. A call is dispatched to the right view depending on it's endpoint and method.
+
+        3. A 'Request' object is created in a local, isolated execution context.
+
+        4. A 'Response' object wraps the content to send back.
+
+
+
+- Flask's Built-in Features
+
+    1. The 'session' object for cookie-based data
+    2. The global 'request' context
+    3. Signals for sending and intercepting events
+    4. Extensions and middleware for adding features
+    5. Templates for building text-based content
+    6. Configuration to group your running options in a config file
+    7. Blueprints for organizing your code into namespaces
+    8. Error handling and debugging
+
+
+
+- The 'session' Object
+
+    - Like the 'request' object, Flask creates a 'session' object that is unique to the request context.
+        It's a dict-like object, which Flask seriailizes into a cookie on the user side.
+
+    - The data contained in the session mapping is dumped into a JSON mapping, compressed using 'zlib' to
+        make it smaller, and finally, encoded in Base64.
+
+    - When the 'session' gets serialized, the 'itsdangerous' library signs the content using a 'SECRET_KEY'
+        value defined in the application.  The signing uses HMAC (Hash-Based Message Authentication Code)
+        and SHA1.
+
+    - This signature, which is added to the data as a suffix, ensures that the client cannot tamper with
+        the data unless they know the SECRET_KEY used to sign the session value.  Note that the data
+        itself is not encrypted.
+
+    - When you're building microservices that are not producing HTML, you rarely rely on cookies since
+        they are specific to web browsers.  However, the idea of keeping volatile key-value storage for
+        each user can be very useful for speeding up server-side work.  For instance, you can cache 
+        some information on the server side instead of looking it up in the database every time a request
+        comes in.
+
+
+
+- Globals
+
+    - The 'current_app', 'g', 'request', and 'session' variables are available each time a request
+        context is created.
+
+
+    - A common pattern is to use the '@app.before_request' decorator to point to a function that is 
+        called every time a request is made.  That function will often store data in 'g'.
+
+        from Flask import Flask, g, request
+
+        @app.before_request
+        def authenticate():
+            if request.authorization:
+                g.user = request.authorization['username']
+            else:
+                g.user = 'Anonymous'
+
+        @app.route('/api')
+        def my_microservice():
+            return { 'Hello': g.user }
+
+
+
+- Signals
+
+    - Sometimes, we want to send a message from one place to another, when components are not directly
+        connected.  One way we can send such messages is to use 'signals'.  Flask uses the 'Blinker'
+        library, which is a signal library that lets you subscribe a function to an event.
+
+
+    - Events are instances of the 'NamedSignal' class, which is created with a unique label.  These are
+        the current ones available:
+
+        template_rendered
+        before_render_template
+
+        request_started
+        request_finished
+        got_request_exception
+        request_tearing_down
+
+        appcontext_tearing_down
+        appcontext_pushed
+        appcontext_popped
+
+        message_flashed
+
+
+    - Here is an example of using the 'request_finished' signal:
+
+        from flask import Flask, g, request_finished
+        from flask.signals import signals_available
+
+        def finished(sender, response, **extra):
+            print('About to send a response')
+            print(response)
+
+        request_finished.connect(finished)
+
+        @app.route('/api')
+        def my_microservice():
+            return { 'Hello': 'World' }
+
+
+    - The 'Sentry' Python client hooks into the 'got_request_exception' signal to log exceptions.
+
+
+    - It's not a great idea to do any time-consuming work in a signal-registered function.  We should
+        send such things to a task queue (ie RabbitMQ or AWS SQS) instead.
+
+
+
+- Extensions and Middleware
+
+    - Flask extensions are simply Python projects that, once installed, provide a package or module
+        named 'flask_something'.  They can be useful for avoiding reinventing common concerns.
+
+    - The other option for extending Flask is to use WSGI middleware.  These extend the application by
+        wrapping around an endpoint and changing the data that goes in and comes out again.
+
+
+    - For example, for testing purposes, this middleware fakes an 'X-Forwarded-For' header, so that the
+        Flask application thinks it's behind a proxy like nginx.  We're testing that 'remote_addr'
+        attribute gets the Proxy IP instead of the client IP.
+
+        from flask import Flask, request
+        from werkzeug.datastructures import Headers
+
+        class XFFMiddleware:
+            def __init__(self, app, real_ip="10.1.1.1"):
+            self.app = app
+            self.real_ip = real_ip
+
+            def __call__(self, scope, receive, send):
+                if "headers" in scope and "HTTP_X_FORWARDED_FOR" not in scope["headers"]:
+                    new_headers = scope["headers"].raw_items() + [
+                        (
+                            b"X-Forwarded-For",
+                            f"{self.real_ip}, 10.3.4.5, 127.0.0.1".encode(),
+                        )
+                    ]
+
+                scope["headers"] = Headers(new_headers)
+                return self.app(scope, receive, send)
+
+        app = Quart(__name__)
+        app.wsgi_app = XFFMiddleware(app.wsgi_app)
+
+        @app.route("/api")
+        def my_microservice():
+            if "X-Forwarded-For" in request.headers:
+                ips = [ip.strip() for ip in request.headers["X-Forwarded-For"].split(",")]
+                ip = ips[0]
+            else:
+                ip = request.remote_addr
+
+            return {"Hello": ip}
+
+
+
+- Templates
+
+    - Jinja templating can be used for anything text-based like HTML.  Typically, we'll use it for anything
+        meant for a human, like an SMS message or a message on Slack or Discord.
+
+
+    - For example, we can create an email template 'email_template.j2':
+
+        email_template.j2
+        --------------------------------
+        Date: {{date}} 
+        From: {{from}} 
+        Subject: {{subject}} 
+        To: {{to}} 
+        Content-Type: text/plain 
+         
+        Hello {{name}}, 
+         
+        We have received your payment! 
+         
+        Below is the list of items we will deliver for lunch: 
+         
+        {% for item in items %}- {{item['name']}} ({{item['price']}} Euros) 
+        {% endfor %} 
+         
+        Thank you for your business!
+
+
+    - Then, we can use the template to send an email message:
+
+        email_render.py
+        ---------------------------
+        from datetime import datetime
+        from jinja2 import Template
+        from email.utils import format_datetime
+
+        def render_email(**data):
+            with open("email_template.j2") as f:
+                template = Template(f.read())
+            return template.render(**data)
+
+        data = {
+            "date": format_datetime(datetime.now()),
+            "to": "bob@example.com",
+            "from": "shopping@example-shop.com",
+            "subject": "Your Burger order",
+            "name": "Bob",
+            "items": [
+                {"name": "Cheeseburger", "price": 4.5},
+                {"name": "Fries", "price": 2.0},
+                {"name": "Root Beer", "price": 3.0},
+            ],
+        }
+
+        print(render_email(**data))
+
+
+
+- Configuration
+
+    - When building applications, we need to expose operations to run them, such as db connection strings,
+        email addresses, or any other variable specific to a deployment.
+
+    - The Flask object comes with an object called 'config', which contains some built-in variables that
+        can be updated when you start your app.
+
+
+    - For example:
+
+        prod_settings.py
+        -----------------------------
+        class Config:
+            DEBUG = False
+            SQLURI = SQLURI = "postgres://username:xxx@localhost/db"
+
+
+    - Then, the config can be loaded from your app using 'app.config.from_object':
+
+        from flask import Flask
+
+        app = Flask(__name__)
+        app.config.from_object(prod_settings.Config)
+
+        print(app.config)
+
+
+    - There are 3 significant drawbacks to using Python modules as config files.
+
+        1. It can be tempting to add code as well as simple values.  However, when an application is
+            deployed, the configuration is managed separately from the code.
+
+        2. If another team is in charge of deployment, they will have to edit the Python code, and they
+            might not be Python developers.
+
+
+    - Since, Flask exposes it's configuration via 'app.config', it is quite simple to load additional
+        options from a JSON, YAML, or other text-based format.
+
+        # Load from json file
+        app.config.from_json('prod_settings.json')
+        app.config['SQLURI']
+
+        # Load from yaml file
+        import yaml
+        app.config.from_file('prod_settings.yml', yaml.safe_load)
+        app.config['SQLURI']
+
+
+    - If we prefer the 'settings.ini' format with [sections], we can use the 'ConfigParser' class.
+
+
+
+- Blueprints
+
+    - As applications get larger, they will have multiple endpoints.  It makes sense to organize them
+        into separate modules:
+
+        app.py             # Contains the Flask app object and runs the app
+        employees.py       # Views related to employees
+        teams.py           # Views related to teams
+
+
+    - Blueprints take this idea a step further by organizing your views into namespaces which give them
+        some extra framework assistance.
+
+        from flask import Blueprint
+
+        teams = Blueprint("teams", __name__)
+
+        _DEVS = ["Alice", "Bob"]
+        _OPS = ["Charles"]
+        _TEAMS = {1: _DEVS, 2: _OPS}
+
+        @teams.route("/teams")
+        def get_all():
+            return _TEAMS
+
+        @teams.route("/teams/<int:team_id>")
+        def get_team(team_id):
+            return _TEAMS[team_id]
+
+
+    - Then, in app.py:
+
+        app.register_blueprint(teams)
+
+
+
+- Error Handling
+
+    - In HTML web apps, you usually get specific HTML pages when you encounter a 404 or 5.x.x error.
+        In microservice applications, it's usually a good idea to make sure every response sent to clients,
+        including any exception, is JSON-formatted.
+
+
+    - Flask provides the '@app.error_handler' decorator, which links a function to a specific error code:
+
+        @app.error_handler(500)
+        def error_handling(error):
+            return { 'Error': str(error), 500 }
+
+        @app.route('/')
+        def my_microservice():
+            raise TypeError('Some Exception')
+
+
+    - If you want Flask to send this JSON response for each 4.x.x and 5.x.x error response, we need to
+        register the function for each error code.  The 'abort.mapping' dict contains the list of all
+        possible errors.  We handle all the errors with:
+
+        # catch_all_errors.py
+        from quart import Flask, jsonify, abort
+        from werkzeug.exceptions import HTTPException, default_exceptions
+
+        def jsonify_errors(app):
+            def error_handling(error):
+                if isinstance(error, HTTPException):
+                    result = {
+                        "code": error.code,
+                        "description": error.description,
+                        "message": str(error),
+                    }
+                else:
+                    description = abort.mapping[ error.code].description
+                    result = {"code":  error.code, "description": description, "message": str(error)}
+                resp = jsonify(result)
+                resp.status_code = result["code"]
+                return resp
+            for code in default_exceptions.keys():
+                app.register_error_handler(code, error_handling)
+            return app
+
+        app = Flask(__name__)
+        app = jsonify_errors(app)
+
+        @app.route("/api")
+        def my_microservice():
+           raise TypeError("Some Exception")
+
+
+
+- A Microservice Skeleton
+
+    - Instead of calling 'app.run()' in a module, we want to have it in a Python package so that we can
+        use standard packaging tools such as 'pip' and 'setuptools'.
+
+    - Also, the 'run()' call can be removed, since Flask provides a generic run command that looks for
+        an application using the 'FLASK_APP' environment variable.
+
+
+    - Here is the project skeleton:
+
+        > microservice
+          > setup.py           # Distutils' setup file, used to install and release the project
+          > Makefile           # Targets used to make, build, and run the project
+          > settings.yml       # Default settings in a YAML file
+          > requirements.txt   # Project dependencies
+
+          > myservices
+            > __init__.py
+            > app.py           # Contains the app itself
+            > views
+              > __init__.py
+              > home.py        # Home blueprint
+            > tests
+              > __init__.py
+              > test_home.py   # Test Home blueprint
+
+
+    - Here is the 'app.py':
+
+        import os
+        from myservice.views import blueprints
+        from quart import Quart
+
+        _HERE = os.path.dirname(__file__)
+        _SETTINGS = os.path.join(_HERE, "settings.ini")
+
+        def create_app(name=__name__, blueprints=None, settings=None):
+            app = Flask(name)
+
+            # Load configuration
+            settings = os.environ.get("QUART_SETTINGS", settings)
+            if settings is not None:
+                app.config.from_pyfile(settings)
+
+            # Register blueprints
+            if blueprints is not None:
+                for bp in blueprints:
+                    app.register_blueprint(bp)
+
+            return app
+
+        app = create_app(blueprints=blueprints, settings=_SETTINGS)
+
+
+    - Here is the 'home.py' bluerint:
+
+        from flask import Blueprint
+
+        home = Blueprint('home', __name__)
+
+        @home.route('/')
+        def index():
+            return {}
+
+
+    - To run the application:
+
+        $ FLASK_APP=myservice flask run
