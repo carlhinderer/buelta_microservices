@@ -1,0 +1,188 @@
+-----------------------------------------------------------------------
+| CHAPTER 5 - SPLITTING THE MONOLITH                                  |
+-----------------------------------------------------------------------
+
+- Identifying Potential Microservices
+
+    - We should run tests to find the performance bottlenecks in the application instead of only relying
+        on pure intuition about what needs to be split apart.
+
+
+    - The question should not be "Which parts of the application would work as a microservice?"  Instead,
+        we should ask:
+
+        "Which parts of the application are having the most impact on performance?"
+        "Which parts of the application are difficult to change?"
+
+
+
+- Code Complexity and Maintenance
+
+    - We can use the 'Radon' tool to measure cyclomatic complexity in our application.
+
+    - We should strive for simplicity, but not over-simplification.
+
+
+
+- Metrics and Monitoring
+
+    - The 'Prometheus' library is a popular cloud-agnostic way to do operational monitoring.  It scrapes
+        the configured endpoints and returns metrics about their performance.
+
+    - We can add Prometheus by adding metrics-gathering routes to our application.  For a production
+        service, the metrics collection service is another component that needs to be deployed and
+        managed.
+
+    - The standard metrics are how many times each of our endpoints is hit, and how long those requests
+        take.  We can also add additional metrics, like how much CPU/memory is used or how long network
+        calls take.
+
+
+
+- Logging
+
+    - Since logging every single thing can consume a lot of resources, we should think carefully about 
+        what messages need to be written.
+
+    - We'll need to remove sensitive deatils with any PII or passwords from our log messages.
+
+
+    - Python has powerful logging options that can automatically format messages for us.  This will
+        display messages in the terminal while the application is running.
+
+        import logging
+        from flask import Flask, request
+
+        app = Flask(__name__)
+        app.logger.setLevel(logging.INFO)
+
+        @app.route('/hello')
+        def hello_handler():
+            app.logger.info('hello_handler was called')
+            app.logger.debug(f"The request was {request}")
+            return {'Hello': 'World!'}
+
+
+    - The above method of logging produces a string log message.  If we want to be able to parse the log
+        messages more easily later, we can create JSON log messages instead.  Python's 'structlog' library
+        can be used for this.
+
+        import logging
+        from flask import Flask, request
+
+        import structlog
+        from structlog import wrap_logger
+        from structlog.processors import JSONRenderer
+
+        app = Quart(__name__)
+
+        logger = wrap_logger(
+            app.logger,
+            processors=[
+                structlog.processors.add_log_level,
+                structlog.processors.TimeStamper(),
+                JSONRenderer(indent=4, sort_keys=True),
+            ],
+        )
+
+        app.logger.setLevel(logging.DEBUG)
+
+        @app.route("/hello")
+        def hello_handler():
+            logger.info("hello_handler called")
+            logger.debug(f"The request was {request}")
+            return {"Hello": "World!"}
+
+        if __name__ == "__main__":
+            app.run()
+
+
+    - Further configuration of 'structlog' allows you to send the JSON directly to a central logging
+        server, such as 'Graylog', which is useful for aggregating logs from different copies of the
+        application running on different servers.
+
+
+
+- Feature Flags
+
+    - A 'feature flag' is a config option to turn a feature on or off.  They allow you to make changes
+        in Production whenever it is convenient.
+
+
+    - Turning a new feature on is simply a case of adjusting a config file. which can be done via:
+
+        - A new code release
+        - Some configuration management tool
+        - Updating a service discovery tool like etcd
+
+
+    - We can set a feature flag to only use the new way for some of the requests (ie 1%) and keep using
+        the old way for the rest of the requests.
+
+
+    - To use a feature flag:
+
+        @app.route("/migrating_endpoint")
+        def migration_example():
+            if current_app.config.get("USE_NEW_WORKER"):
+                return new_worker()
+            else:
+                return original_worker()
+
+
+    - To use a feature flag based on a percentage split:
+
+        @app.route("/migrating_gradually")
+        def migrating_gradually_example():
+            percentage_split = current_app.config.get("NEW_WORKER_PERCENTAGE")
+            if percentage_split and random.randint(1,100) <= percentage_split:
+                return new_worker()
+            else:
+                return original_worker()
+
+
+
+- Refactoring Jeeves
+
+    - We can have a microservice that receives incoming messages, then routes them to other microservices
+        that perform the actions the user asked for.  Then those services can all call a service that
+        specializes in sending messages to Slack.
+
+    - Some of these services will need to contact the DB, and if we were to keep our current DB
+        architecture, each of these new microservices would need the DB models.  This is a tightly coupled
+        design.  To prevent this, we can convert our DB into it's own microservice.
+
+
+    - Our updated architecture will look like:
+
+           Slack Request API                               Slack Posting Service
+                  |                                                 |
+                  |                                                 |
+                  -------------  Actions Microservices --------------
+                  |                                                 |
+                  -------------  Weather               --------------
+                  |                                                 |
+                  -------------  Reminders             --------------
+                  |                                                 |
+                  -------------  Collect Strava Runs   --------------
+                  |                                                 |
+                  -------------  Database Service      --------------
+
+                RabbitMQ transfers messages between services
+
+
+
+- Workflow
+
+    - When a user types a message, the URL we have configured will be sent some JSON-formatted information.
+        This data is received by our 'Slack Request API', which is where all the Slack message processing
+        happens, and where we choose the right microservice as a destination.
+
+    - We will also build a data structure that can contain information about where to send a reply that
+        will act as an envelope for our message.
+
+    - Instead of one service sending a synchronous web request to the microservice, we will just pass a
+        message onto the message queue.
+
+    - Once a reply has been created, a service will send another RabbitMQ message to the 'Slack Posting'
+        service.

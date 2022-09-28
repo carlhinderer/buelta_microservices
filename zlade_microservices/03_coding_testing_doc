@@ -47,7 +47,7 @@
         3. Specific behaviors to reproduce (ie a network outage or changing data/time)
 
 
-    - We can improve our unit tests by reducing the number of functinos that have side effects and gather
+    - We can improve our unit tests by reducing the number of functions that have side effects and gather
         I/O operations into the highest level possible.  This way, we have fewer methods that need 
         connections mocked out.
 
@@ -197,7 +197,7 @@
 
 - Developer Documentation
 
-    - Developer documentation should evovle with the code.  This includes everything a developer should
+    - Developer documentation should evolve with the code.  This includes everything a developer should
         know about your microservices project, especially:
 
           - How it is designed

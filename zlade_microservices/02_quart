@@ -326,7 +326,7 @@
         -----------------------------
         class Config:
             DEBUG = False
-            SQLURI = SQLURI = "postgres://username:xxx@localhost/db"
+            SQLURI = "postgres://username:xxx@localhost/db"
 
 
     - Then, the config can be loaded from your app using 'app.config.from_object':
