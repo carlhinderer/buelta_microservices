@@ -1,0 +1,199 @@
+-----------------------------------------------------------------------
+| CHAPTER 6 - INTERACTING WITH OTHER SERVICES                         |
+-----------------------------------------------------------------------
+
+- Calling Other Web Resources
+
+    - Synchronous interactions can be done via HTTP APIs using JSON payloads.  Most of these interfaces
+        are RESTful, meaning that they are stateless.
+
+    - However, using a RESTful schema is not required, and some projects implement RPC APIs.
+
+
+    - In Python projects, the 'requests' library is the most popular HTTP client.
+
+        import requests
+
+        def make_request(url):
+            headers = {
+                "Content-Type": "application/json",
+            }
+
+            with requests.Session(headers=headers) as session:
+                with session.get(url) as response:
+                    print(response.text())
+
+        url = 'http://localhost:5000/api'
+        make_request(url)
+
+
+
+- Finding Out Where to Go
+
+    - In these examples, we usually hardcode URLs into the code, which makes for easy examples, but is not
+        that flexible.  There are several options to manage configuration options without adding them
+        directly to the code, such as environment variables and service discovery.
+
+
+    - When using containerized environments, the most common approach to get configuration options into a
+        container is to pass the container some environment variables.
+
+        import os
+
+        def create_app():
+            app = Flask(__name__)
+            app.config['REMOTE_URL'] = os.environ.get('OTHER_SERVICE_URL', 'https://default.url/here')
+
+
+    - The downside of using environment variables is that if the URL changes, we need to restart the
+        application.  We must always be sure not to record any secrets in log messages.
+
+
+    - To avoid a service needing all options at deploy time, we can use service discovery.  With this
+        approach, we just tell the service where to ask for configuration.  Services such as etcd provide
+        a reliable key/value store.
+
+        # Store a setting in etcd
+        $ etcdctl put myservice/production/rabbitmq/url https://my.rabbitmq.url/
+
+        # Get a setting from etcd
+        $ etcdctl get myservice/production/rabbitmq/url
+
+
+
+- Transferring Data
+
+    - JSON is a human-readable format.  However, there are much smaller transfer formats that can save a
+        lot of bandwidth.
+
+
+    - Other ways to transfer data involve:
+
+        - Caching
+        - Compression
+        - Binary Payloads
+        - RPC
+
+
+
+- HTTP Cache Headers
+
+    - In the HTTP protocol, there are a few cache mechanisms that can be used to indicate to a client that
+        the page it's trying to fetch has not changed since the last visit.  We can add caching to all of
+        our microservices on the read-only endpoints (GETs and HEADs).
+
+    - The simplest way to implement caching is to add an 'ETag' header to the response.  An 'ETag' functions
+        as a version for the resource a client is trying to get.  It can be a timestamp, a version number,
+        or a hash.  It should be unique to the value of a response.
+
+
+    - The client can store a dictionary with {URL: ETag}.  When making a new request, it can pass an ETag
+        in the 'If-Modified-Since' header.  If the server sends back a 304 status code, the resource 
+        hasn't changed and the client can use the cached one.
+
+        from datetime import datetime
+
+        def time2etag():
+            return datetime.now().isoformat()
+
+        @app.route('/api/user/<user_id?')
+        def get_user(user_id):
+            user = User.query(user_id=user_id)
+
+            if user.modified in request.if_none_match:
+                return Response('Not modified', status=304)
+
+            resp = jsonify(user)
+
+            # Set the ETag
+            resp.set_etag(user.modified)
+
+            return resp
+
+
+    - In the real world, relying on timestamps can be problematic unless it is done in a transaction by the
+        database system.  We can use hashes, but computing the hash might be as costly as just returing
+        the data.  There is no one-size-fits-all solution to HTTP caching.
+
+
+
+- GZIP Compression
+
+    - There are trade-offs between the size of compressed data, the speed of compression and decompression,
+        and how widely implemented the compression algorithm is.
+
+
+    - GZIP compression is available on almost every system.  For instance, this nginx configuration will
+        enable GZIP compression for every response produced by the Flask app on port 5000 with an
+        application/json content type:
+
+        http {
+            gzip on;
+            gzip_types application/json;
+            gzip_proxied any;
+            gzip_vary on;
+
+            server {
+                listen 80;
+                server_name localhost;
+
+                location / {
+                    proxy_pass http://localhost:5000;
+                }
+            }
+
+
+    - From the client side, making a request with 'Accept-Encoding: gzip' will trigger the compression.
+        Note we're making the request to 'localhost:8080', which is proxying to the application at
+        'localhost:5000'.
+
+        $ curl http://localhost:8080/api -H "Accept-Encoding: gzip"
+
+
+    - To compress data that you are sending to the server, we can use the 'gzip' module.
+
+        import gzip
+        import json
+        import requests
+
+        url = "http://127.0.0.1:8080/api_post"
+        headers = {
+            "Content-Encoding": "gzip",
+        }
+
+        data = {"Hello": "World!", "result": "OK"}
+        data = bytes(json.dumps(data), "utf8")
+        data = gzip.compress(data)
+
+        with requests.Session(headers=headers) as session:
+            with session.post(url, data=data) as response:
+                print(response.text())
+
+
+
+- Protocol Buffers
+
+    - If your microservice sends/receives a lot of data, it can be a good idea to use a binary format,
+        like Protocol Buffers or MessagePack.
+
+    - Protobuf requires you to describe the schema of the data.
+
+    - Using Protobuf with a framework such as gRPC can abstract away the network interaction from your
+        application.
+
+
+
+- MessagePack
+
+    - MessagePack is schemaless, and you can serialize your data just by calling a function.  To install it:
+
+        $ pip install msgpack-python
+
+
+    - To use it:
+
+        import msgpack
+
+        data = {'this': 'is', 'some': 'data'}
+        packed = msgpack.packb(data, use_bin_type=True)
+        unpacked = msgpack.unpackb(msgpack.packb(data, use_bin_type=True))
