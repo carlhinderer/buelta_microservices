@@ -1,0 +1,236 @@
+------------------------------------------------------------------------------------
+| CHAPTER 1 - ESCAPING MONOLITHIC HELL                                             |
+------------------------------------------------------------------------------------
+
+- Monolithic = Hexagonal Architecture
+
+
+
+- Benefits of Monoliths
+
+    1. Simple to develop
+    2. Easy to make radical changes
+    3. Straightforward to test
+    4. Straightforward to deploy
+    5. Easy to scale (just run multiple instances behind a load balancer)
+
+
+
+- Downsides of Monoliths
+
+    1. Complexity intimidates developers
+    2. Development is slow
+    3. Path from commit to deployment is long and arduous
+    4. Scaling is difficult
+    5. Delivering a reliable monolith is challenging
+    6. Locked into technology stack
+
+
+
+- Scale Cube
+
+    X-Axis = Load balance requests across multiple instances
+    Y-Axis = Functional decomposition (ie with microservices)
+    Z-Axis = Route requests based on some attribute of the request (ie user_id)
+
+
+
+- Microservices vs SOA
+
+    SOA = Smart pipes like ESBs
+        = Global data model and shared DBs
+        = Larger monolithic applications
+
+    Microservces = Dumb pipes like message brokers or REST/gRPC
+                 = Separate DB per service
+                 = Smaller services
+
+
+
+- Benefits of Microservices
+
+    - Continuous delivery and deployment
+    - Services are small and easily maintained
+    - Services are independently deployable
+    - Services are independently scalable
+    - More autonomous teams
+    - Easier to adopt new technologies
+    - Better fault isolation
+
+
+
+- Drawbacks of Microservices
+
+    - Finding the right set of services is challenging
+    - Distributed systems are complex.  Developing, testing, and deploying them is complex.
+    - Deploying features that span multiple services requires careful coordination
+    - Deciding when to adopt microservices is difficult
+
+
+
+- Commonly Used Pattern Structure
+
+    - Forces = Issues you must address when solving a problem
+    - Resulting Context = Consequences of Applying a Pattern (Benefits, Drawbacks, Issues)
+    - Related Patterns = Relationship between pattern and other patterns
+
+
+
+- Relationships of Related Patterns
+
+    - Predecessor = a pattern that motivates the need for the new pattern
+    - Successor = a pattern that solves the issue introduced by this pattern
+    - Alternative = a pattern that provides alternative solutions to this pattern
+    - Generalization = a general solution to a problem
+    - Specialization = a specialized form of a particular pattern
+
+
+    - Examples:
+        - Monolithic structure is predecessor, microservices is successor
+        - Monolith and microservices are alternatives
+        - 'Single service per host' is a generalization
+        - 'Deploy service as a container' is a specialization of 'Single Service Per Host'
+
+
+    - A collection of patterns related through these relationships forms a 'pattern language'.  The
+        patterns in a pattern language work together to solve problems in a particular domain.
+
+
+
+- Overview of Microservices Architecture Patterns
+
+    - Application Patterns
+
+        - Decomposition
+        - Database Architecture
+        - Querying
+        - Maintaining Data Consistency
+        - Testing
+
+
+    - Application Infrastructure Patterns
+
+        - Cross-cutting concerns
+        - Security
+        - Transactional messaging
+        - Communication style
+        - Reliability
+        - Observability
+
+
+    - Infrastructure Patterns
+
+        - Deployment
+        - Discovery
+        - External API
+
+
+
+- Patterns for Decoupling an Application into Services
+
+    - Decompose by business capability
+    - Decompose by subdomain
+
+
+
+- Communication Patterns
+
+    - Communication Style = what type of IPC?
+
+        - Messaging
+        - RPI
+        - Domain-specific
+
+
+    - Discovery = how does a client determine the IP of a service?
+
+        - Client-side discovery
+        - Server-side discovery
+        - Service registry
+        - Self-registration
+        - Third-party registration
+
+
+    - Reliability = how can we ensure that communication between services is reliable?
+
+        - Circuit breaker
+
+
+    - Transactional Messaging = how to integrate messages and events with db transactions that update data?
+
+        - Polling publisher
+        - Transaction log tailing
+        - Transactional outbox
+
+
+    - External API = how do clients of your application communicate with the services?
+
+        - API Gateway
+        - Backend for frontend
+
+
+
+- Data Consistency Patterns for Implementing Transaction Management
+
+    - For loose coupling, each service should have it's own DB
+    - Using 2PC isn't a viable approach for modern applications
+    - An application has to maintain data consistency using a Saga pattern
+
+
+
+- Patterns for Querying Data in a Microservices Architecture
+
+    - Some queries need to join data owned by multiple services
+    - A service's data is only available via it's API, so you can't use joined queries
+    - The 'API Composition Pattern' calls one or more APIs and aggregates the results
+    - The 'CQRS' pattern maintains replicas of the datas
+
+
+
+- Service Deployment Patterns
+
+    - With microservices, you need a highly automated deployment architecture
+    - Typically use a deployment platform based on VMs, containers, or serverless technology
+
+
+
+- Patterns for Designing Observable Services
+
+    - Health Check API
+    - Log aggregation
+    - Distributed tracing
+    - Exception tracking
+    - Application metrics
+    - Audit logging
+
+
+
+- Patterns for Automated Testing of Services
+
+    - Consumer-driven contract test = Verify service meets expectations of it's clients
+    - Consumer-side contract test = Verify client of service can communicate with service
+    - Service component test = Test a service in isolation
+
+
+
+- Patterns for Handling Cross-Cutting Concerns
+
+    - Common patterns for every service include observability and discovery patterns
+    - Also need Externalized Configuration pattern to get config settings like credentials at runtime
+    - Microservice Chassis pattern is used to build services on top of a framework that handles concerns
+
+
+
+- Security Patterns
+
+    - In microservices, users are typically authenticated by the API gateway
+    - It must then pass information about the user (ie identity and roles) to services
+    - Access pattern (ie JWT) is commonly used
+
+
+
+- Continuous Delivery
+
+    - Ability to get changes into production, to users, in a safe, fast, and reliable way
+    - Code is always releasable
+    - Relies on a high level of automation, including automated testing
