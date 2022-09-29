@@ -197,3 +197,157 @@
         data = {'this': 'is', 'some': 'data'}
         packed = msgpack.packb(data, use_bin_type=True)
         unpacked = msgpack.unpackb(msgpack.packb(data, use_bin_type=True))
+
+
+
+- Asynchronous Messages
+
+    - Asynchronous calls can be as simple as a separate thread or process that performs work without
+        interfering with the request/response cycle.
+
+    - However, it is much more reliable to let the microservice send the message to a queue to be picked
+        up later by another process.
+
+
+
+- Message Queue Reliability
+
+    - Ideally, we would like to add a message to the queue and have it delivered exactly once.  This is
+        very difficult to achieve in a distributed system.
+
+
+    - In RabbitMQ, we have 2 real choices:
+
+        - At-most-once
+        - At-least-once
+
+
+    - The 'at-most-once' strategy will not account for any unreliability in the message delivery system
+        or the failure of a worker.  Once a worker has accepted the message, the message queue forgets
+        about it.
+
+    - With the 'at-least-once' strategy, if there are any failures, the delivery will be attempted again
+        until the worker acknowledges it has acted upon the message.  This ensures no data is lost, but
+        the message may be processed by multiple workers.  We can add a UUID to the message so that
+        it can be deduplicated when it is written to a database or storage.
+
+
+
+- Basic Queues
+
+    - The pattern used by Celery workers is a push-pull tasks queue.  One service pushes messages into a
+        queue, and some workers pick them up from the other end and perform an action on them.  Each task
+        goes to a single worker.
+
+    - Once a sender has confirmed that the message was added to the broker, RabbitMQ offers some message
+        persistence.  If the workers all go offline, we don't lose messages that are in the queue.
+
+
+
+- Topic Exchanges and Queues
+
+    - Topics are a way of filtering and classifying messages that travel through the queue.  Each message
+        is sent with a label that idenfies what sort of message it is.  Our workers can subscribe to
+        specific topics or patterns that match several topics.
+
+
+    - The AMQP protocol is organized into 3 concepts:
+
+        - A 'queue' is a recipient that holds messages and waits for consumers to pick them
+
+        - An 'exchange' is an entry point for publishers to add new messages to the system
+
+        - A 'binding' defines how messages are routed from exchanges to queues
+
+
+    - To set up a basic publishing app:
+
+        # Add an exchange
+        $ rabbitmqadmin declare exchange name=incoming type=topic
+
+        # Add queues
+        $ rabbitmqadmin declare queue name=playstore
+        $ rabbitmqadmin declare queue name=notifications
+
+        # Add bindings
+        $ rabbitmqadmin declare binding source="incoming" destination_type="queue" 
+            destination="playstore" routing_key="publish.playstore"
+
+        $ rabbitmqadmin declare binding source="incoming" destination_type="queue" 
+            destination="notifications" routing_key="publish.*"
+
+
+    - In this setup, any message with a topic that starts with 'publish' will end up in the notifications
+        queue, and if it is 'publish.playstore', it will end up in both queues.  Any other topics will
+        cause the message to be discarded.
+
+
+    - To interact with RabbitMQ in Python code, we can use 'Pika', an RPC client that implements all the
+        RPC endpoints that a Rabbit service publishes.  Here, we publish 2 messages in the 'incoming'
+        exchange.
+
+        from pika import BlockingConnection, BasicProperties
+
+        def message(topic, message):
+            connection = BlockingConnection()
+
+            try:
+                channel = connection.channel()
+                props = BasicProperties(content_type='text/plain', delivery_mode=1)
+                channel.basic_publish('incoming', topic, message, props)
+            finally:
+                connection.close()
+
+        message("publish.playstore", "We are publishing an Android App!")
+        message("publish.newsletter", "We are publishing a newsletter!")
+
+
+    - A worker script that waits for work that needs to be published to the Play Store looks like:
+
+        import pika
+
+        def on_message(channel, method_frame, header_frame, body):
+            print(f"Now publishing to the play store: {body}!")
+            channel.basic_ack(delivery_tag=method_frame.delivery_tag)
+
+        connection = pika.BlockingConnection()
+        channel = connection.channel()
+        channel.basic_consume("playstore", on_message)
+        
+        try:
+            channel.start_consuming()
+        except KeyboardInterrupt:
+            channel.stop_consuming()
+
+        connection.close()
+
+
+
+- Publish/Subscribe
+
+    - The previous approach works fine when you want a single consumer to remove each message from the
+        queue.  When you want a message to be published to several works, the Publish/Subscribe pattern
+        must be used.
+
+    - This pattern is the basis for building a general event system.  It is implemented exactly like
+        the previous one, except the exchange has a fanout type.  In this setup, every queue you bind
+        to the fanout exchange will receive the same message.
+
+
+
+- Testing
+
+    - If we are using 'requests' to perform API calls, we can easily mock them out using the 'requests-mock'
+        library.
+
+
+
+- Using OpenAPI
+
+    - The OpenAPI specification (previously known as Swagger) is a standard way of describing a set of
+        HTTP endpoints, how they are used, and the structure of the data that is sent and received.
+
+    - By describing an API using a JSON or YAML file, it allows the intent to become machine-readable.
+        This means you can use a code generator to produce a client library or automatically validate
+        data as it enters or leaves the system.  Basically, it's kind of like WSDL from the XML services
+        era.
