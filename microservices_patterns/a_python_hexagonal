@@ -1,0 +1,66 @@
+------------------------------------------------------------------------------------
+| A - HEXAGONAL ARCHITECTURE IN PYTHON                                             |
+------------------------------------------------------------------------------------
+
+- Hexagonal Architecture
+
+    - Architectural pattern where certain boundaries and interfaces are defined as edges of a hexagon.
+        It's also known as the 'ports and adapters pattern', which is a better description of it's
+        actual implementataion.
+
+    - Implementation of SOLID principles Dependency Inversion and Liskov Substitution.
+
+    - Together with DDD and SOLID principles, fits very well with microservice architectures.
+
+    - The DDD is the center hexagon.  Each adapter that implements one of the interfaces (ports) of
+        the domain is another hexagon that sticks to the center hexagon with one edge.
+
+
+
+- Dependency Inversion
+
+    - Not natural in Python, which doesn't have interfaces.  You can get it working, but it's not a 
+        first-class citizen, and it's not Pythonic.
+
+    - There is no common DI framework in Python like there is in other languages.
+
+    - To make it easy, for our DDD, we could create a package called 'domain'.  Inside the domain, we're not
+        allowed to import anything which is not defined in the same package.
+
+
+
+- Dependency Injection
+
+    - Imagine we need a function that sends ALARM messages to a message bus.  The first iteration is:
+
+        from my_cool_messaging_library import get_message_bus()
+
+        def send_alert(message: str):
+            message_bus = get_message_bus()
+            message_bus.send(topic='alert', message=message)
+
+
+    - The problem is that 'send_alert' is dependent on the message bus, but this dependency is hidden from
+        the caller.  What if we want to use a different message bus.  We would have to call 'mock.patch'
+        to test it.  Instead, let's pass the message bus into the function:
+
+        from my_cool_messaging_library import MessageBus
+
+        def send_alert(message_bus: MessageBus, message: str):
+            message_bus.send(topic='alert', message=message)
+
+
+    - Now, using type annotations, the 'send_alert()' function depends on the 'MessageBus' object.  To
+        test it:
+
+        def test_send_alert_sends_message_to_alert_topic()
+            message_bus_mock = MessageBusMock()
+            send_alert(message_bus_mock, "Hacking attempt detected!")
+
+            assert message_bus_mock.sent_to_topic == 'alert'
+            assert message_bus_mock.sent_message == "Hacking attempt detected!"
+
+        class MessageBusMock(MessageBus):
+            def send(self, topic, message):
+                self.sent_to_topic = topic
+                self.sent_message = message
