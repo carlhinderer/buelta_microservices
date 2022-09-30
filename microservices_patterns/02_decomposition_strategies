@@ -1,0 +1,380 @@
+------------------------------------------------------------------------------------
+| CHAPTER 2 - DECOMPOSITION STRATEGIES                                             |
+------------------------------------------------------------------------------------
+
+- Software Architecture
+
+    - Traditional Goals: Scalability, Reliability, Security
+    - Microservices also focus on: Maintainability, Testability, Deployability
+    - Architecture = Structures and relationships between them
+    - Functional and nonfunctional requirements
+
+
+
+- The 4+1 View Model of Software Architecture
+
+    - Logical = software elements created by developers, like classes and packages
+    - Implementation = output of the build system, executables and modules
+    - Process = components at runtime, processes and IPC
+    - Deployment = how processes are mapped to machines, networking
+
+    - Scenarios = how components collaborate to handle a request
+
+
+
+- Layered Architecture Style
+
+    - Presentation Layer
+      Business Logic Layer
+      Persistence Layer
+
+    - Each layer depends only on the layer below it
+
+    - Single presentation layer makes it hard to handle diverse clients
+    - Single persistence layer makes it hard to use multiple data stores
+    - Business logic depends on pesistence layer
+
+
+
+- Hexagonal Architecture Style
+
+    - Business logic at the center
+
+    - One or more inbound adapters to handle incoming requests by invoking business logic
+        (ie an MVC controller)
+
+    - One or more outbound adapters invoked by business logic to call external applications
+        (ie a ORM to access a DB, a call to a remote service, publish an event)
+
+    - The business logic doesn't depend on the presentation or data access logic.  They 
+        depend on it.  This decouples the business logic from the presentation and data access tiers.
+
+
+
+- Monolithic Architecture
+
+    - Structure the application as a single executable/deployable component
+
+
+
+- Microservices Architecture
+
+    - Set of multiple executables / deployables
+
+    - Loosely coupled, independently deployables services
+
+    - Services often correspond to business capabilities
+
+    - Loose coupling means all communication occurs via API calls, not shared DBs
+
+    - Shared libraries should be used only for functionality that is unlikely to change, and
+        should not introduce coupling.
+
+
+
+- Services
+
+    - A 'service' is a standalone, independently deployable component that implements some useful
+        functionality.
+
+
+    - It has an API that provides clients access to it's functionality.  The API consists of commands,
+        queries, and events.
+
+        - A 'command' performs actions and updates data (ie 'create_order()')
+
+        - A query retrieves data (ie 'get_order_by_id()')
+
+        - A service also publishes events (ie 'OrderCreated') which are consumed by it's clients
+
+
+    - All communication between APIs should be done via APIs.  Services are prohibited from communicating
+        through a database.  This makes maintaining data consistency and querying across services more
+        complex.
+
+    - If we use shared libraries, we must be very careful not to introduce coupling between services.  We
+        should strive to use libraries for code that rarely changes.
+
+    - The size of a service is mostly unimportant, and it's not really a useful metric.
+
+
+
+- Defining a Microservices Architecture for an Application
+
+    - 3-Step Process for Defining Architecture
+
+        1. Identify system operations (requests that must be handled)
+        2. Identify services
+        3. Define service APIs and collaborations
+
+
+    - Obstacles to Decomposition
+
+        - Network latency = might make decomposition impossible if too many round trips
+        - Synchronous communication = reduces availability
+        - Data consistency = need to use sagas
+        - God classes = classes need to be used throughout organization
+
+
+
+- Identifying System Operations
+
+    - Typically, nouns in user stories (ie Order, User, Restaurant) map to services and verbs in
+        user stories(ie create_order, accept_order) map to system operations.
+
+    - A system operations can create, update, or delete domain objects.  It can also create or
+        destroy relationships between them.
+
+
+    - The first step in the process of defining system operations is to sketch a high-level domain model
+        for the application.  We construct the domain model by analyzing the nouns in the stories and
+        scenarios.  For instance, this scenario is for the 'Place Order' story.
+
+        Given a consumer
+          And a restaurant
+          And a delivery address/time that can be served by that restaurant
+          And an order total that meets the restaurant's order minimum
+        When the consumer places an order for the restaurant
+        Then consumer's credit card is authorized
+          And an order is created in the PENDING_ACCEPTANCE state
+          And the order is associated with the consumer
+          And the order is associated with the restaurant
+
+
+    - This scenario is for the 'Accept Order' story:
+
+        Given an order that is in the PENDING_ACCEPTANCE state
+          and a courier that is available to deliver the order
+        When a restaurant accepts an order with a promise to prepare by a particular time
+        Then the state of the order is changed to ACCEPTED
+          And the order's promiseByTime is updated to the promised time
+          And the courier is assigned to deliver the order
+
+
+    - The responsibilities of each class are as follows:
+
+        Consumer — A consumer who places orders.
+      Order — An order placed by a consumer. It describes the order and tracks its status.
+      OrderLineItem — A line item of an Order.
+      DeliveryInfo — The time and place to deliver an order.
+      Restaurant — A restaurant that prepares orders for delivery to consumers.
+      MenuItem — An item on the restaurant’s menu.
+      Courier — Delivers orders to consumers. Tracks the availability and their current location.
+      Address — The address of a Consumer or a Restaurant.
+      Location — The latitude and longitude of a Courier.
+
+
+
+- Defining System Operations
+
+    - For our purposes, we'll consider 2 kinds of system operations.  'Commands' are operations
+        that create/update/delete data.  'Queries' are read-only operations.
+
+
+    - Each of the commands will have a list of necessary preconditions and postconditions.
+
+
+    - Here is a sample set of commands:
+
+        Actor        Story                          Command
+        --------------------------------------------------------------------
+        Consumer     Create Order                   create_order
+
+        Restaurant   Accept Order                   accept_order
+        Restaurant   Order Ready for Pickup         note_order_ready_for_pickup
+
+        Courier      Update Location                note_updated_location
+        Courier      Delivery Picked up             note_delivery_picked_up
+        Courier      Delivery Delivered             note_delivery_delivered
+
+
+    - Here are sample queries:
+
+        find_available_restaurants(delivery_address, delivery_time)
+        find_restaurant_menu(id)
+
+
+
+- Decomposing Into Services by Business Capability
+
+    - A business capability is something a business does to generate value.  An organization's
+        business capabilities are identified by analyzing the organization's purpose, 
+        structure, and business processes.
+
+
+    - Sample Business Capabilities
+
+        1. Supplier Management
+            - Courier management (Courier information)
+            - Restaurant information management (Restaurant menus, locations, open hours)
+
+        2. Consumer Management (Consumer information)
+
+        3. Order Taking and Fulfillment
+            - Order management (Enabling consumers to create and manage orders)
+            - Restaurant order management (Managing preparation of orders at a restaurant)
+            - Logistics
+            - Courier availability management (Real-time availability of couriers to deliver products)
+            - Delivery management (Delivering orders to consumers)
+
+        4. Accounting
+            - Consumer accounting (Billing of consumers)
+            - Restaurant accounting (Payments to restaurants)
+            - Courier accounting (Payments to couriers)
+
+
+    - Sample Service Decomposition
+
+        1. Courier Service (Courier management)
+        2. Restaurant Service (Restaurant information management)
+        3. Consumer Service (Consumer management)
+        4. Order Service (Order management)
+        5. Kitchen Service (Restaurant order management)
+        6. Delivery Service (Courier availability and delivery management)
+        7. Accounting Service (Consumer, restaurant, and courier accounting)
+
+
+
+- Decomposing Into Services by Subdomain
+
+    - DDD is an approach for building software centered on the development of an object-oriented
+        domain model.  The 'domain' is the application's problem space.
+
+
+    - DDD creates a separate domain model for each 'subdomain'.  The set of services ends up 
+        looking very similar to the business capabilities (ie order taking, order management). 
+
+
+    - DDD calls the scope of a domain model a 'bounded context'.  Each bounded context is its
+        own service or set of services.
+
+
+
+- Decomposition Guidelines
+
+    (Note that these are 2 of 11 of Bob Martin's principles.)
+
+
+    - Single Responsibility Principle 
+        = A class should only have one reason to change.
+
+
+    - Common Closure Principle
+        = If 2 classes always have to change in lockstep, they belong in the same package.
+
+
+
+- Decomposition Obstacles
+
+    - Network Latency
+        = Might need to batch API calls or combine services
+
+
+    - Synchronous IPC reduces availability
+        = For instance, the simplest way for 'create_order' to work is for the Order Service
+            to make REST calls to the other services.  However, this approach will fail if
+            any of the services is down.  Messaging might be a better approach.
+
+
+    - Maintaining Data Consistency Across Services
+        = Some operations need to update data in multiple services.  2PC distributed transactions
+            are impractical, so we must use sagas to do this.
+
+
+    - Obtaining a Consistent View of the Data
+        = Even though each service's data is consistent, you can't obtain a globally consistent
+            view of the data.  If you need some group of data to be globally consistent, it
+            has to reside in the same service.
+
+
+    - God Classes Prevent Decomposition
+        = Most applications have at least one gigantic class with way too much functionality,
+            and breaking it up seems impossible.  The solution is to treat each service as a
+            separate subdomain with its own version of the offending class.
+
+
+
+- Defining Service APIs
+
+    - There are 2 reasons for a service API operation: 
+
+        1. Service API Operations, which are either called by external clients or by other internal 
+             services.
+
+        2. Operations to support collaboration between services, only invoked by other services.
+
+
+    - Sample Breakdown of Service APIs
+
+        [Called by external clients]
+        Consumer Service
+          + create_consumer
+
+        Order Service
+          + create_order
+
+        Restaurant Service
+          + find_available_restaurants
+
+
+        [Called by other services]
+        Kitchen Service
+          + accept_order
+        + note_order_ready_for_pickup
+
+        Delivery Service  
+          + note_updated_location
+        + note_delivery_picked_up
+        + note_delivery_delivered
+
+
+    - Some system operations (ie 'create_consumer') are handled by a single service.  Others span multiple
+        services.  For example, the Order Service must invoke the following services to implement
+        'create_order':
+
+        1. Consumer Service = Verify consumer can place an order and obtain payment information
+
+        2. Restaurant Service = Validate line order items, verify delivery address and time is in 
+             restaurant's service area, verify order minimum is met, obtain prices for the order line
+             items.
+
+        3. Kitchen Service = Create the ticket
+
+        4. Accounting Service = Authorize the consumer's credit card.
+
+
+    - Similarly, in order to implement the 'accept_order()' system operation, the Kitchen Service must 
+        invoke the Delivery Service to schedule a courier to deliver the order.  In order to fully define
+        the service APIs, you need to analyze each system operation and determine what collaboration is
+        required.
+
+
+
+- The Services, Their Revised APIs, and Their Collaborators
+
+    Service              Operations                    Collaborators
+    -----------------------------------------------------------------------
+    Consumer Service     verifyConsumerDetails()       —
+
+    Order Service        createOrder()               Consumer Service
+                                                         verifyConsumerDetails()
+                                                     Restaurant Service
+                                                         verifyOrderDetails()
+                                                     Kitchen Service
+                                                         createTicket()
+                                                     Accounting Service
+                                                         authorizeCard()
+
+    Restaurant Service   findAvailableRestaurants()    —
+                       verifyOrderDetails()
+
+    Kitchen Service    createTicket()                Delivery Service
+                       acceptOrder()                   scheduleDelivery()
+                       noteOrderReadyForPickup()
+
+    Delivery Service   scheduleDelivery()            —
+                       noteUpdatedLocation()
+                       noteDeliveryPickedUp()
+                       noteDeliveryDelivered()
+
+    Accounting Service   authorizeCard()               —
